@@ -1,0 +1,547 @@
+---
+title: "Sales Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: cerulean
+    orientation: rows
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(readxl)
+stores <- read_excel("Stores.xlsx")
+stores = stores[order(stores$'Store ID'),]
+summary.frame <- read_excel("Parviflora.xlsx")
+# order by months
+summary.frame$MONTH <- factor(summary.frame$MONTH, month.abb, ordered=TRUE)
+summary.frame[order(summary.frame$MONTH), ]
+totalSales <- summary.frame$TOTAL
+totalcount <- summary.frame$`TOTAL COUNT`
+avgsale <- sum(totalSales)/sum(totalcount)
+avg_store_sale <- sum(totalSales)/length(unique(stores$`Store ID`))
+stores_unique <- unique(stores$`Store ID`)
+avg_trans <- sum(totalcount)/length(unique(stores$`Store ID`))
+daff <- summary.frame$DAFFODIL
+daff_trans<- summary.frame$`DAFFODIL COUNT`
+daff_avg_store <- sum(daff_trans)/length(unique(stores$`Store ID`))
+daff_avg <- sum(daff)/length(unique(stores$`Store ID`))
+
+```
+
+
+Introduction
+================================
+
+Row 
+-----------------------------------------------------------------------
+
+### INTRODUCTION OF PROJECT
+
+The aim of this project is to perform business analytics for Polish flower seller which is the largest producer of daffodils in the country, with 3 other flower types rounding off their offerings. To perform business analystic, it is used Q1 2020 sales data which is not integrated, as it comes from different reporting systems.
+
+*Business requirements are following:*
+
+- Combine the datasets, so it is possible to monitor monthly sales trends for each of the 4 flower types at each store location.
+
+- Take note of any discrepancies or apparent faults in the data, so the company can use that information to amend  their systems.
+
+- Prepare a presentation in R Markdown with 5 slides maximum, showing the most important observations from your data analysis.
+
+- Do not modify the input files in any way.
+
+- Prepare the R code for data import in such a way that you will be able to import data for more than 3 months with no  modifications to your code.
+
+- Prepare the R Markdown presentation in such a way that it will automatically update when more than 3 months of data is used as an input.
+
+Row 
+-----------------------------------------------------------------------
+
+### DISCREPANCIES REPORT
+
+- Polish letters in store names are replaced with **"?"** in summary of sales files.
+
+- There is a store with name  **"Parviflora"** without Store ID. It can be Parviflora headquarters but it is not clear.
+
+- Katowice store seems to be closed before *January* because there is just one transaction and which is a return on January. Since a flower was returned, the store still in the January sales list.
+
+- Name of the *Swiebodzin store* does not have 'Parviflora' in the beginning. Also, there is no sales information about Daffodils. 
+
+- On the Daffodils sales report, there is a Store with ID number which is **"345"**. There is not any information regarding this store ID. 
+
+- There is another store with 10-digit ID number on the Daffodils sales file. Actually, it seems that its ID number copied from its location number. 
+
+- After all this information, there are two stores on the Daffodil sales list without any store information and there are two stores (Headquarters and Swiebodzin) which do not have any Daffodil sales. So, they could match. But we can not match them since we do not have any further information about those. Swiebodzin store ID is **"570"** but stores with IDs like 5xx, generally have retail stores. So, it might be the case that Swiebodzin's daffodil sales were written to store with ID 345 and this store might be assigned to Swiebodzin.
+
+- Another discrepancy with store ID which has *10-digit ID*. When we sum transactions of this store in March 2020, it differs from the total transaction amount. It should be a miscalculation. Because of that, total transaction amount of Daffodil sales on March is wrong and as expected total daffodil sales amount is wrong.
+
+
+Overview
+================================
+
+Row 
+-----------------------------------------------------------------------
+
+```{r}
+library(shiny)
+library(shinydashboard)
+ui <- dashboardPage(skin = "black",
+                    dashboardHeader(title = ""),
+                    dashboardSidebar(disable = TRUE),
+                    dashboardBody(tags$head(
+                      tags$style(HTML("body {overflow-y: hidden;}"))
+                      ),
+                        fluidRow(
+                            valueBoxOutput("test_box"),
+                            valueBoxOutput("transaction"),
+                            valueBoxOutput("avgsale"),
+                            valueBoxOutput("avg_sales"),
+                            valueBoxOutput("avg_trans"),
+                            valueBoxOutput("daff_sales"),
+                            valueBoxOutput("daff_trans"),
+                            valueBoxOutput("daff_avg"),
+                            valueBoxOutput("daff_avg_store")
+                        )
+                    )
+)
+
+# Server response
+server <- function(input, output, session) {
+    output$test_box <- renderValueBox({
+        totalSales %>% 
+            sum() %>% 
+            formatC(1:10 * 100000, format="d", big.mark=",") %>%
+            valueBox("Total Sales",
+                     icon = icon("thumbs-up", lib = "glyphicon"),
+                     color = "blue"
+        )
+    })
+        output$transaction <- renderValueBox({
+        totalcount %>% 
+            sum() %>% 
+            formatC(1:10 * 100000, format="d", big.mark=",") %>% 
+            valueBox(subtitle = "Total Transaction Amount",
+                     icon = icon("chart-area"),
+                     color = "purple"
+        )
+    })
+        output$avgsale <- renderValueBox({
+        summary.frame %>% 
+            summarise(pertrans = sum(totalSales)/sum(totalcount)) %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>% 
+            valueBox("Average Sales Per Transaction",
+                     icon = icon("chart-bar"),
+                     color = "green"
+        )
+    })
+        output$avg_sales <- renderValueBox({
+        avg_store_sale %>%
+            sum() %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>% 
+            valueBox("Average Sales Per Store",
+                     icon = icon("chart-pie"),
+                     color = "maroon"
+        )
+    })
+        output$avg_trans <- renderValueBox({
+        avg_trans %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>%
+            valueBox("Average Transaction Per Store",
+                     icon = icon("flag"),
+                     color = "fuchsia"
+        )
+    })
+        output$daff_sales <- renderValueBox({
+        daff %>%
+            sum() %>% 
+            formatC(1:10 * 100000, format="d", big.mark=",")%>%
+            valueBox("Total Daffodil Sales",
+                     icon = icon("pagelines"),
+                     color = "purple"
+        )
+    })
+        output$daff_trans <- renderValueBox({
+        daff_trans %>%
+            sum() %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>%
+            valueBox("Total Daffodil Transaction",
+                     icon = icon("users"),
+                     color = "lime"
+        )
+    })
+        output$daff_avg <- renderValueBox({
+        daff_avg %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>%
+            valueBox("Average Daffodil Sales per Store",
+                     icon = icon("signal"),
+                     color = "aqua"
+        )
+    })
+        output$daff_avg_store <- renderValueBox({
+        daff_avg_store %>%
+            formatC(1:10 * 100000, format="d", big.mark=",") %>%
+            valueBox("Average Daffodil Transaction per Store",
+                     icon = icon("sliders-h"),
+                     color = "red"
+        )
+    })
+}
+
+shinyApp(ui, server)
+```
+
+<br>
+<br>
+
+Row 
+-----------------------------------------------------------------------
+
+### Table
+
+```{r, fig.align="center"}
+library("DT")
+library(shiny)
+library(shinydashboard)
+
+ui= fluidPage(
+
+  # Create a new Row in the UI for selectInputs
+  fluidRow(
+    column(4,
+        selectInput("store",
+                    "Store Name:",
+                    c("All",
+                      unique(as.character(summary.frame$`Store Name`))))
+    ),
+    column(4,
+        selectInput("month",
+                    "Month:",
+                    c("All",
+                      unique(as.character(summary.frame$MONTH))))
+    )
+  ),
+  # Create a new row for the table.
+  DT::dataTableOutput("table")
+)
+
+server= function(input, output) {
+
+  # Filter data based on selections
+  output$table <- DT::renderDataTable(DT::datatable({
+    data <- summary.frame
+    if (input$store != "All") {
+      data <- data[data$`Store Name` == input$store,]
+    }
+    if (input$month != "All") {
+      data <- data[data$MONTH == input$month,]
+    }
+    data
+  }))
+
+}
+
+shinyApp(server= server, ui=ui)
+```
+
+Monthly Sales For Each Flower
+================================
+
+Row 
+-----------------------------------------------------------------------
+
+### Azalea
+
+```{r}
+options(scipen=10000)
+library(plotly)
+azalea <- summary.frame %>%
+  group_by(MONTH) %>%
+  dplyr::summarise(azalea_sales = sum(AZALEA, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = MONTH,
+    y = azalea_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Month", y = "Azalea") 
+
+azalea %>% ggplotly()
+
+```
+
+### Begonia
+
+```{r}
+options(scipen=10000)
+begonia <- summary.frame %>%
+  group_by(MONTH) %>%
+  dplyr::summarise(begonia_sales = sum(BEGONIA, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = MONTH,
+    y = begonia_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Month", y = "Begonia")
+
+begonia %>% ggplotly()
+```
+
+Row 
+-----------------------------------------------------------------------
+
+### Carnation
+
+```{r}
+options(scipen=10000)
+carnation <- summary.frame %>%
+  group_by(MONTH) %>%
+  dplyr::summarise(carnation_sales = sum(CARNATION, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = MONTH,
+    y = carnation_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Month", y = "Carnation")
+
+carnation %>% ggplotly()
+```
+
+### Daffodil
+
+```{r}
+options(scipen=10000)
+daffodil <- summary.frame %>%
+  group_by(MONTH) %>%
+  dplyr::summarise(daffodil_sales = sum(DAFFODIL, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = MONTH,
+    y = daffodil_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Month", y = "Daffodil")
+
+daffodil %>% ggplotly()
+```
+
+Transaction
+================================
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Earning Per Transaction
+
+```{r}
+azalea_df = summary.frame %>% dplyr::select('MONTH', "Store ID", "Store Name", "AZALEA COUNT", "AZALEA")
+begonia_df = summary.frame %>% dplyr::select('MONTH', "Store ID", "Store Name", "BEGONIA COUNT", "BEGONIA")
+carnation_df = summary.frame %>% dplyr::select('MONTH', "Store ID", "Store Name", "CARNATION COUNT", "CARNATION")
+daffodil_df = summary.frame %>% dplyr::select('MONTH', "Store ID", "Store Name", "DAFFODIL COUNT", "DAFFODIL")
+
+names(azalea_df) =c("Month", "Store ID", "Store Name", "Count" , "Sales")
+names(begonia_df) =c("Month", "Store ID", "Store Name", "Count" , "Sales")
+names(carnation_df) =c("Month", "Store ID", "Store Name", "Count" , "Sales")
+names(daffodil_df) =c("Month", "Store ID", "Store Name", "Count" , "Sales")
+
+azalea_df$`Flower Type` = "AZALEA"
+begonia_df$`Flower Type` = "BEGONIA"
+carnation_df$`Flower Type` = "CARNATION"
+daffodil_df$`Flower Type` = "DAFFODIL"
+
+combined_df = rbind(azalea_df,
+                    begonia_df, 
+                    carnation_df,
+                    daffodil_df)
+combined_df<- combined_df %>% mutate(`Per Transaction`= combined_df$Sales/combined_df$Count)
+
+ ui<- fillPage(
+  
+  # Header or title Panel 
+  titlePanel(h4('Earning Per Transaction', align = "center")),
+  
+  # Sidebar panel
+  sidebarPanel(
+    radioButtons("variable", "Please Select a Flower Type:",
+                choices = unique(combined_df$`Flower Type`), selected = unique(combined_df$`Flower Type`)[1]),
+    br(),
+    br(),
+    radioButtons("var", "Please Select a Month:",
+                choices = unique(combined_df$Month), selected = unique(combined_df$Month)[1]),
+    br(),
+    br(),
+    br(),
+    br(),
+    br()
+    
+    ),
+    tableOutput("data1"),
+ 
+  # Main Panel
+  mainPanel(
+    plotOutput("hist")
+    
+    )
+)
+
+server=  function(input, output) {
+    
+  output$hist <- renderPlot({
+     
+      filtered <- combined_df %>%
+          filter(`Flower Type` == input$variable,
+                             Month== input$var
+                             )
+    ggplot(filtered, aes(x=reorder(`Store Name`, -`Per Transaction`), y=`Per Transaction`)) + 
+    geom_bar(stat = "identity", fill="#006f75")+theme_bw() +
+    xlab("") + ylab("Earning")+
+    theme(axis.text.x=element_text(angle=90, hjust=1))
+      })
+  }
+  
+shinyApp(server= server, ui=ui)
+```
+
+### Total Sales
+
+```{r}
+total_sales<- combined_df %>%
+  group_by(`Store Name`, Month) %>%
+  dplyr::summarise(sales = sum(Sales, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -sales),
+    y = sales,
+    fill = Month
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Sales")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+total_sales %>% ggplotly()
+```
+
+### Total Transaction
+
+```{r}
+
+total_transaction <- combined_df %>%
+  group_by(`Store Name`, Month) %>%
+  dplyr::summarise(transaction = sum(Count, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -transaction),
+    y = transaction,
+    fill = Month
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Transaction Amount")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+total_transaction %>% ggplotly()
+```
+
+
+Sales for Each Flower
+================================
+
+<style>
+.nav-tabs-custom > .nav-tabs > li.active {border-top-color: green}
+}
+</style>
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Azalea
+
+```{r}
+options(scipen=10000)
+azalea1 <- summary.frame %>%
+  group_by(`Store Name`, MONTH) %>%
+  dplyr::summarise(azalea_sales = sum(AZALEA, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -azalea_sales),
+    y = azalea_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Azalea Sales")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+azalea1 %>% ggplotly()
+```
+
+### Begonia
+
+```{r}
+options(scipen=10000)
+begonia1 <- summary.frame %>%
+  group_by(`Store Name`, MONTH) %>%
+  dplyr::summarise(begonia_sales = sum(BEGONIA, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -begonia_sales),
+    y = begonia_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Begonia Sales")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+begonia1 %>% ggplotly()
+
+  
+```
+
+### Carnation 
+
+```{r}
+options(scipen=10000)
+carnation1 <- summary.frame %>%
+  group_by(`Store Name`, MONTH) %>%
+  dplyr::summarise(carnation_sales = sum(CARNATION, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -carnation_sales),
+    y = carnation_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Carnation Sales")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+carnation1 %>% ggplotly()
+
+```
+
+
+### Daffodil
+
+```{r}
+library(plotly)
+options(scipen=100000)
+daffodil1 <- summary.frame %>%
+  group_by(`Store Name`, MONTH) %>%
+  dplyr::summarise(daffodil_sales = sum(DAFFODIL, na.rm = TRUE)) %>%
+  ggplot(aes(
+    x = reorder(`Store Name`, -daffodil_sales),
+    y = daffodil_sales,
+    fill = MONTH
+  )) +
+  geom_bar(stat="identity")+
+  theme_bw()+
+  labs(x = "Store Name", y = "Daffodil Sales")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+
+daffodil1 %>% ggplotly()
+```
+
